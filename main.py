@@ -114,6 +114,14 @@ OPEN_PATHS = {"/api/health"}
 
 
 @app.middleware("http")
+async def add_cache_headers(request: Request, call_next):
+    response = await call_next(request)
+    path = request.url.path
+    if request.method == "GET" and path.startswith("/api/") and path not in OPEN_PATHS and response.status_code == 200:
+        response.headers.setdefault("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=86400")
+    return response
+
+@app.middleware("http")
 async def require_api_key(request: Request, call_next):
     path = request.url.path
     if API_KEY and path.startswith("/api/") and path not in OPEN_PATHS:
