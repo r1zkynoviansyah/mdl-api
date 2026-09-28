@@ -143,13 +143,13 @@ async def root():
 
 @app.get("/api/search/q/{query}", tags=["Search"],
          summary="Search dramas",
-         description="Search MyDramaList by title. Returns up to 20 results including title, slug, year, image, rating, and URL.")
-async def search_dramas(query: str):
+         description="Search MyDramaList by title. By default filters for Korean titles. Pass korean_only=false for all Asian dramas.")
+async def search_dramas(query: str, korean_only: bool = True):
     """Search for dramas by title query."""
     try:
-        logger.info(f"Searching for: {query}")
+        logger.info(f"Searching for: {query} (korean_only={korean_only})")
         await asyncio.sleep(1)  # Rate limiting
-        results = await scraper.search_dramas(query)
+        results = await scraper.search_dramas(query, korean_only=korean_only)
         return results
     except Exception as e:
         logger.error(f"Error searching dramas: {str(e)}")

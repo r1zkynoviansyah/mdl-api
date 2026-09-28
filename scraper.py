@@ -43,18 +43,18 @@ class MyDramaListScraper:
         """Make HTTP request and return BeautifulSoup object"""
         try:
             session = await self._get_session()
-            response = await session.get(url, timeout=10)
+            response = await session.get(url, timeout=25)
             response.raise_for_status()
             return BeautifulSoup(response.content, 'html.parser')
         except Exception as e:
             logger.error(f"Request failed for {url}: {str(e)}")
             raise
 
-    async def search_dramas(self, query: str) -> Dict[str, Any]:
+    async def search_dramas(self, query: str, korean_only: bool = True) -> Dict[str, Any]:
         """Search for dramas by query"""
-        search_url = f"{self.base_url}/search?q={quote(query)}"
+        filter_params = "&adv=titles&co=3" if korean_only else ""
+        search_url = f"{self.base_url}/search?q={quote(query)}{filter_params}"
         soup = await self._make_request(search_url)
-        
 
         results = []
         drama_items = soup.find_all('div', class_='box')
@@ -74,11 +74,20 @@ class MyDramaListScraper:
                     continue
 
                 year_elem = item.find('span', class_='text-muted')
-                year_match = re.search(r'(\d{4})', year_elem.get_text(strip=True)) if year_elem else None
+                raw_info = year_elem.get_text(strip=True) if year_elem else ''
+
+                if korean_only and 'korean' not in raw_info.lower():
+                    continue
+
+                year_match = re.search(r'(\d{4})', raw_info)
                 year = year_match.group(1) if year_match else ''
                 
                 if not year:
                     continue
+
+                episodes_match = re.search(r'(\d+)\s+episodes?', raw_info)
+                episodes = int(episodes_match.group(1)) if episodes_match else 0
+                media_type = raw_info.split(' - ')[0].strip() if ' - ' in raw_info else raw_info
 
                 img_elem = item.find('img', class_='lazy')
                 image = img_elem['data-src'] if img_elem and 'data-src' in img_elem.attrs else (item.find('img')['src'] if item.find('img') else '')
@@ -90,6 +99,8 @@ class MyDramaListScraper:
                     'title': title,
                     'slug': slug,
                     'year': year,
+                    'type': media_type,
+                    'episodes': episodes,
                     'image': image,
                     'rating': rating,
                     'url': f"{self.base_url}{link}" if link else ''
@@ -102,7 +113,7 @@ class MyDramaListScraper:
 
     async def resolve_slug(self, query: str) -> Optional[str]:
         """Search and return the first drama slug if the input is a title"""
-        results = await self.search_dramas(query)
+        results = await self.search_dramas(query, korean_only=True)
         return results['results'][0]['slug'] if results['results'] else None
 
     async def get_drama_details(self, slug: str) -> Optional[Dict[str, Any]]:
